@@ -40,8 +40,9 @@ export class PeriodParser {
     const start = new Date(today);
     start.setHours(0, 0, 0, 0);
 
-    // End is current time
-    const end = new Date(now);
+    // Set to end of day (23:59:59)
+    const end = new Date(today);
+    end.setHours(23, 59, 59, 999);
 
     return {
       start,
@@ -111,8 +112,12 @@ export class PeriodParser {
       return false;
     }
 
-    // Check if end is not in the future (allow some tolerance for "today")
-    if (dateRange.end > new Date(now.getTime() + 5 * 60 * 1000)) { // 5 minutes tolerance
+    // Check if end is not in the future
+    // For "today", allow end of day even if it's technically in the future
+    const endOfToday = new Date(now);
+    endOfToday.setHours(23, 59, 59, 999);
+
+    if (dateRange.end > endOfToday) {
       return false;
     }
 
@@ -140,7 +145,7 @@ export class PeriodParser {
       {
         value: 'today',
         label: '今日',
-        description: '今日の00:00から現在まで'
+        description: '今日の00:00から23:59まで'
       },
       {
         value: 'yesterday',

@@ -21,7 +21,7 @@ export class ClaudeAnalyzer implements AIAnalyzer {
       const prompt = this.buildAnalysisPrompt(messagesData, context);
 
       const response = await this.anthropic.messages.create({
-        model: 'claude-3-sonnet-20240229',
+        model: 'claude-3-5-sonnet-20241022',
         max_tokens: 4000,
         temperature: 0.3,
         messages: [
@@ -52,7 +52,7 @@ export class ClaudeAnalyzer implements AIAnalyzer {
       const prompt = this.buildConsultPrompt(situation, context);
 
       const response = await this.anthropic.messages.create({
-        model: 'claude-3-sonnet-20240229',
+        model: 'claude-3-5-sonnet-20241022',
         max_tokens: 2000,
         temperature: 0.4,
         messages: [
@@ -105,7 +105,7 @@ export class ClaudeAnalyzer implements AIAnalyzer {
       const prompt = `${conversationHistory}\n\n管理者からの追加情報: ${adminResponse}\n\n上記の情報を踏まえて、より具体的な対応策を提案してください。`;
 
       const response = await this.anthropic.messages.create({
-        model: 'claude-3-sonnet-20240229',
+        model: 'claude-3-5-sonnet-20241022',
         max_tokens: 2000,
         temperature: 0.4,
         messages: [
@@ -172,7 +172,7 @@ ${channels.map(c => `- ${c.name} (ID: ${c.id})`).join('\n')}
 上記のデータから、状況に関連する重要な情報を抽出し、問題の背景や経緯を分析してください。`;
 
       const response = await this.anthropic.messages.create({
-        model: 'claude-3-sonnet-20240229',
+        model: 'claude-3-5-sonnet-20241022',
         max_tokens: 3000,
         temperature: 0.3,
         messages: [

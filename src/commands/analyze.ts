@@ -147,6 +147,7 @@ export const analyzeCommand = {
 
       // Prepare analysis context
       const analysisContext: AnalysisContext = {
+        serverId: serverId,
         serverRules: serverConfig.rules,
         clientRequirements: serverConfig.clientRequirements,
         communityContext: {

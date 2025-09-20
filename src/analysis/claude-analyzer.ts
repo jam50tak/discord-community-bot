@@ -18,7 +18,7 @@ export class ClaudeAnalyzer implements AIAnalyzer {
     context: AnalysisContext
   ): Promise<AnalysisResult> {
     try {
-      const prompt = this.buildAnalysisPrompt(messagesData, context);
+      const prompt = await this.buildAnalysisPrompt(messagesData, context);
 
       const response = await this.anthropic.messages.create({
         model: 'claude-3-5-sonnet-20241022',
@@ -200,29 +200,11 @@ ${channels.map(c => `- ${c.name} (ID: ${c.id})`).join('\n')}
     }
   }
 
-  private buildAnalysisPrompt(messagesData: any, context: AnalysisContext): string {
-    const basePrompt = promptManager.getDefaultPrompt();
-
-    let contextInfo = '\n\n## 追加コンテキスト\n';
-    if (context.serverRules.length > 0) {
-      contextInfo += `**サーバールール:**\n${context.serverRules.map(rule => `- ${rule}`).join('\n')}\n\n`;
-    }
-
-    if (context.clientRequirements.length > 0) {
-      contextInfo += `**クライアント要望:**\n${context.clientRequirements.map(req => `- ${req}`).join('\n')}\n\n`;
-    }
-
-    if (context.communityContext) {
-      contextInfo += `**コミュニティ情報:**\n`;
-      contextInfo += `- サーバーサイズ: ${context.communityContext.serverSize}人\n`;
-      contextInfo += `- 主要言語: ${context.communityContext.primaryLanguage}\n`;
-      contextInfo += `- コミュニティタイプ: ${context.communityContext.communityType}\n`;
-      contextInfo += `- アクティブ時間: ${context.communityContext.activeHours}\n\n`;
-    }
-
-    const dataSection = '## 分析対象データ\n' + JSON.stringify(messagesData, null, 2);
-
-    return basePrompt + contextInfo + dataSection;
+  private async buildAnalysisPrompt(messagesData: any, context: AnalysisContext): Promise<string> {
+    // サーバー設定を取得してカスタムプロンプトを使用
+    const { configManager } = await import('../config/server-config');
+    const serverConfig = await configManager.loadServerConfig(context.serverId);
+    return promptManager.buildAnalysisPrompt(serverConfig, messagesData, context);
   }
 
   private buildConsultPrompt(situation: string, context: any): string {

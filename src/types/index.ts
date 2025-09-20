@@ -91,6 +91,7 @@ export interface Recommendation {
 }
 
 export interface AnalysisContext {
+  serverId: string;
   serverRules: string[];
   clientRequirements: string[];
   previousReports?: AnalysisResult[];

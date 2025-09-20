@@ -83,6 +83,7 @@ export class AIAnalyzerFactory {
       };
 
       const testContext: AnalysisContext = {
+        serverId: 'test-server',
         serverRules: [],
         clientRequirements: [],
         communityContext: {

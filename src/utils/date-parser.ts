@@ -33,16 +33,22 @@ export class PeriodParser {
     return new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000); // 1 week ago
   }
 
-  private static parseToday(now: Date, _timezone: string): DateRange {
-    const today = new Date(now);
+  private static parseToday(now: Date, timezone: string): DateRange {
+    // Convert current time to JST to get the correct "today"
+    const jstNow = new Date(now.toLocaleString("en-US", { timeZone: timezone }));
 
-    // Set to start of day (00:00:00)
-    const start = new Date(today);
-    start.setHours(0, 0, 0, 0);
+    // Create start of day in JST (00:00:00)
+    const startJST = new Date(jstNow);
+    startJST.setHours(0, 0, 0, 0);
 
-    // Set to end of day (23:59:59)
-    const end = new Date(today);
-    end.setHours(23, 59, 59, 999);
+    // Create end of day in JST (23:59:59)
+    const endJST = new Date(jstNow);
+    endJST.setHours(23, 59, 59, 999);
+
+    // Convert JST times back to UTC for storage
+    const jstOffset = 9 * 60 * 60 * 1000; // JST is UTC+9
+    const start = new Date(startJST.getTime() - jstOffset);
+    const end = new Date(endJST.getTime() - jstOffset);
 
     return {
       start,
@@ -51,17 +57,26 @@ export class PeriodParser {
     };
   }
 
-  private static parseYesterday(now: Date, _timezone: string): DateRange {
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
+  private static parseYesterday(now: Date, timezone: string): DateRange {
+    // Convert current time to JST to get the correct "yesterday"
+    const jstNow = new Date(now.toLocaleString("en-US", { timeZone: timezone }));
 
-    // Set to start of day (00:00:00)
-    const start = new Date(yesterday);
-    start.setHours(0, 0, 0, 0);
+    // Get yesterday's date in JST
+    const yesterdayJST = new Date(jstNow);
+    yesterdayJST.setDate(yesterdayJST.getDate() - 1);
 
-    // Set to end of day (23:59:59)
-    const end = new Date(yesterday);
-    end.setHours(23, 59, 59, 999);
+    // Create start of day in JST (00:00:00)
+    const startJST = new Date(yesterdayJST);
+    startJST.setHours(0, 0, 0, 0);
+
+    // Create end of day in JST (23:59:59)
+    const endJST = new Date(yesterdayJST);
+    endJST.setHours(23, 59, 59, 999);
+
+    // Convert JST times back to UTC for storage
+    const jstOffset = 9 * 60 * 60 * 1000; // JST is UTC+9
+    const start = new Date(startJST.getTime() - jstOffset);
+    const end = new Date(endJST.getTime() - jstOffset);
 
     return {
       start,

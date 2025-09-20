@@ -150,7 +150,7 @@ export class MessageFetcher {
             break;
           }
 
-          if (message.createdAt <= dateRange.end) {
+          if (message.createdAt >= dateRange.start && message.createdAt <= dateRange.end) {
             messages.push(message);
           }
         }

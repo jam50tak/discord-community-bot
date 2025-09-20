@@ -58,6 +58,14 @@ export class APIKeyManager {
     provider: AIProvider
   ): Promise<string | null> {
     try {
+      // First, check environment variables for fallback
+      const envKey = this.getAPIKeyFromEnv(provider);
+      if (envKey) {
+        logger.info(`Using environment variable API key for ${provider}`);
+        return envKey;
+      }
+
+      // Then check stored keys
       const storage = await this.loadAPIKeys();
 
       if (!storage[serverId] || !storage[serverId][provider]) {
@@ -94,14 +102,6 @@ export class APIKeyManager {
       logger.error(`Failed to remove API key for ${provider} in server ${serverId}`, error);
       throw error;
     }
-  }
-
-  public async hasValidAPIKey(
-    serverId: string,
-    provider: AIProvider
-  ): Promise<boolean> {
-    const apiKey = await this.getAPIKey(serverId, provider);
-    return apiKey !== null && apiKey.length > 0;
   }
 
   public async listConfiguredProviders(serverId: string): Promise<AIProvider[]> {
@@ -180,6 +180,50 @@ export class APIKeyManager {
       logger.error('Failed to create config directory', error);
       throw error;
     }
+  }
+
+  private getAPIKeyFromEnv(provider: AIProvider): string | null {
+    switch (provider) {
+      case 'chatgpt':
+        return process.env.OPENAI_API_KEY || null;
+      case 'claude':
+        return process.env.ANTHROPIC_API_KEY || null;
+      case 'gemini':
+        return process.env.GOOGLE_API_KEY || null;
+      default:
+        return null;
+    }
+  }
+
+  public async hasValidAPIKey(
+    serverId: string,
+    provider: AIProvider
+  ): Promise<boolean> {
+    const apiKey = await this.getAPIKey(serverId, provider);
+    return apiKey !== null && apiKey.length > 0;
+  }
+
+  public async getAPIKeySource(
+    serverId: string,
+    provider: AIProvider
+  ): Promise<'environment' | 'stored' | 'none'> {
+    // Check environment first
+    const envKey = this.getAPIKeyFromEnv(provider);
+    if (envKey) {
+      return 'environment';
+    }
+
+    // Check stored keys
+    try {
+      const storage = await this.loadAPIKeys();
+      if (storage[serverId] && storage[serverId][provider]) {
+        return 'stored';
+      }
+    } catch (error) {
+      logger.error(`Failed to check stored API key for ${provider}`, error);
+    }
+
+    return 'none';
   }
 }
 

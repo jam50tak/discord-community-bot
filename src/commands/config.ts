@@ -421,10 +421,26 @@ export const configCommand = {
         const statusFields = await Promise.all(
           providers.map(async (prov) => {
             const hasKey = await apiKeyManager.hasValidAPIKey(serverId, prov);
+            const source = await apiKeyManager.getAPIKeySource(serverId, prov);
             const info = aiAnalyzerFactory.getProviderInfo(prov);
+
+            let status = '❌ 未設定';
+            if (hasKey) {
+              switch (source) {
+                case 'environment':
+                  status = '✅ 設定済み (環境変数)';
+                  break;
+                case 'stored':
+                  status = '✅ 設定済み (保存済み)';
+                  break;
+                default:
+                  status = '✅ 設定済み';
+              }
+            }
+
             return {
               name: info.name,
-              value: hasKey ? '✅ 設定済み' : '❌ 未設定',
+              value: status,
               inline: true
             };
           })

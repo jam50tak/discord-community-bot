@@ -25,8 +25,28 @@ NODE_ENV=production
 LOG_LEVEL=info
 ENCRYPTION_KEY=4493eba6301192459a31118c6bb53c32ff9a415b77e4a5b3eea4cce113135b3f
 
+# AI API Keys（推奨：デプロイでリセットされないように環境変数で設定）
+OPENAI_API_KEY=your_openai_api_key_here
+ANTHROPIC_API_KEY=your_anthropic_api_key_here
+GOOGLE_API_KEY=your_google_api_key_here
+
 # オプション（開発用）
 GUILD_ID=your_test_guild_id
+```
+
+### ⚠️ 重要：APIキーの永続化
+
+**問題**: ボットコマンドでAPIキーを設定しても、デプロイのたびにリセットされます。
+
+**解決策**: 環境変数でAPIキーを設定してください。
+
+#### 方法1: 環境変数設定（推奨）
+Railway ダッシュボードで上記のAPIキー環境変数を設定
+
+#### 方法2: ボットコマンド（非推奨）
+デプロイ後に毎回設定が必要：
+```bash
+/config apikey set provider:claude key:your_api_key
 ```
 
 ### 3. デプロイ実行

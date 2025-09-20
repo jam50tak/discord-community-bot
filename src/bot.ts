@@ -2,6 +2,7 @@ import { Client, GatewayIntentBits, Events, Collection, REST, Routes } from 'dis
 import { config } from 'dotenv';
 import { logger } from './utils/logger';
 import { errorHandler } from './utils/error-handler';
+import { database } from './db/database';
 
 // Import commands
 import { analyzeCommand } from './commands/analyze';
@@ -122,6 +123,20 @@ export class DiscordBot {
 
   public async start(): Promise<void> {
     try {
+      // Initialize database if available
+      if (database.isAvailable()) {
+        logger.info('Initializing database...');
+        await database.initializeSchema();
+        const isConnected = await database.isConnected();
+        if (isConnected) {
+          logger.info('Database connection established');
+        } else {
+          logger.warn('Database connection failed, falling back to file storage');
+        }
+      } else {
+        logger.info('DATABASE_URL not found, using file storage');
+      }
+
       await this.client.login(process.env.DISCORD_TOKEN);
     } catch (error) {
       logger.error('Failed to start bot', error);

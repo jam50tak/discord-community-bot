@@ -2,6 +2,7 @@ import { promises as fs } from 'fs';
 import { join } from 'path';
 import { ServerConfig, AIProvider } from '../types';
 import { logger } from '../utils/logger';
+import { database } from '../db/database';
 
 export class ConfigManager {
   private static instance: ConfigManager;
@@ -20,17 +21,40 @@ export class ConfigManager {
 
   public async loadServerConfig(serverId: string): Promise<ServerConfig> {
     try {
+      // Try database first if available
+      if (database.isAvailable()) {
+        const config = await this.loadConfigFromDatabase(serverId);
+        if (config) {
+          return config;
+        }
+      }
+
+      // Fallback to file system
       const configPath = join(this.configDir, `${serverId}.json`);
       const configData = await fs.readFile(configPath, 'utf-8');
       const config = JSON.parse(configData) as ServerConfig;
 
       // Validate config structure
       this.validateConfig(config);
+
+      // Migrate to database if available
+      if (database.isAvailable()) {
+        await this.saveConfigToDatabase(config);
+        logger.info(`Migrated server config ${serverId} to database`);
+      }
+
       return config;
     } catch (error) {
       if ((error as any).code === 'ENOENT') {
         logger.info(`Creating default config for server ${serverId}`);
-        return this.createDefaultConfig(serverId);
+        const defaultConfig = this.createDefaultConfig(serverId);
+
+        // Save to database if available
+        if (database.isAvailable()) {
+          await this.saveConfigToDatabase(defaultConfig);
+        }
+
+        return defaultConfig;
       }
       logger.error(`Failed to load config for server ${serverId}`, error);
       throw error;
@@ -39,14 +63,21 @@ export class ConfigManager {
 
   public async saveServerConfig(config: ServerConfig): Promise<void> {
     try {
-      // Ensure config directory exists
+      // Save to database if available
+      if (database.isAvailable()) {
+        await this.saveConfigToDatabase(config);
+        logger.info(`Saved config for server ${config.serverId} to database`);
+        return;
+      }
+
+      // Fallback to file system
       await this.ensureConfigDirectory();
 
       const configPath = join(this.configDir, `${config.serverId}.json`);
       const configData = JSON.stringify(config, null, 2);
       await fs.writeFile(configPath, configData, 'utf-8');
 
-      logger.info(`Saved config for server ${config.serverId}`);
+      logger.info(`Saved config for server ${config.serverId} to file`);
     } catch (error) {
       logger.error(`Failed to save config for server ${config.serverId}`, error);
       throw error;
@@ -196,6 +227,81 @@ export class ConfigManager {
    - 注意すべき点
 
 分析は具体的で建設的な内容にし、日本語で回答してください。`;
+  }
+
+  private async loadConfigFromDatabase(serverId: string): Promise<ServerConfig | null> {
+    try {
+      const result = await database.query(
+        'SELECT * FROM server_configs WHERE server_id = $1',
+        [serverId]
+      );
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const row = result.rows[0];
+      return {
+        serverId: row.server_id,
+        serverName: row.server_name || '',
+        aiProvider: row.ai_provider || 'claude',
+        customPrompt: row.custom_prompt || undefined,
+        analyzedChannels: row.analyzed_channels || [],
+        rules: row.rules || [],
+        clientRequirements: row.client_requirements || [],
+        adminRoles: row.admin_roles || [],
+        permissions: {
+          rolePermissions: [],
+          userPermissions: [],
+          defaultPermissions: ['view_help'],
+          adminOnlyPermissions: ['manage_config', 'manage_permissions']
+        },
+        settings: {
+          useCustomPrompt: row.use_custom_prompt || false,
+          defaultAnalysisPeriod: row.default_analysis_period || 'today'
+        }
+      };
+    } catch (error) {
+      logger.error(`Failed to load config from database for server ${serverId}`, error);
+      return null;
+    }
+  }
+
+  private async saveConfigToDatabase(config: ServerConfig): Promise<void> {
+    try {
+      await database.query(`
+        INSERT INTO server_configs (
+          server_id, server_name, ai_provider, custom_prompt,
+          analyzed_channels, rules, client_requirements, admin_roles,
+          use_custom_prompt, default_analysis_period, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, CURRENT_TIMESTAMP)
+        ON CONFLICT (server_id) DO UPDATE SET
+          server_name = EXCLUDED.server_name,
+          ai_provider = EXCLUDED.ai_provider,
+          custom_prompt = EXCLUDED.custom_prompt,
+          analyzed_channels = EXCLUDED.analyzed_channels,
+          rules = EXCLUDED.rules,
+          client_requirements = EXCLUDED.client_requirements,
+          admin_roles = EXCLUDED.admin_roles,
+          use_custom_prompt = EXCLUDED.use_custom_prompt,
+          default_analysis_period = EXCLUDED.default_analysis_period,
+          updated_at = CURRENT_TIMESTAMP
+      `, [
+        config.serverId,
+        config.serverName,
+        config.aiProvider,
+        config.customPrompt,
+        config.analyzedChannels,
+        config.rules,
+        config.clientRequirements,
+        config.adminRoles,
+        config.settings.useCustomPrompt,
+        config.settings.defaultAnalysisPeriod
+      ]);
+    } catch (error) {
+      logger.error(`Failed to save config to database for server ${config.serverId}`, error);
+      throw error;
+    }
   }
 }
 

@@ -6,6 +6,7 @@ import {
   BotPermission
 } from '../types';
 import { logger } from '../utils/logger';
+import { database } from '../db/database';
 
 export class PermissionManager {
   private static instance: PermissionManager;
@@ -24,12 +25,35 @@ export class PermissionManager {
 
   public async getPermissionConfig(serverId: string): Promise<PermissionConfig> {
     try {
+      // Try database first if available
+      if (database.isAvailable()) {
+        const config = await this.loadPermissionConfigFromDatabase(serverId);
+        if (config) {
+          return config;
+        }
+      }
+
+      // Fallback to file system
       const allConfigs = await this.loadPermissionConfigs();
 
       if (!allConfigs[serverId]) {
         // デフォルト設定を作成
-        allConfigs[serverId] = this.createDefaultPermissionConfig();
+        const defaultConfig = this.createDefaultPermissionConfig();
+        allConfigs[serverId] = defaultConfig;
         await this.savePermissionConfigs(allConfigs);
+
+        // Save to database if available
+        if (database.isAvailable()) {
+          await this.savePermissionConfigToDatabase(serverId, defaultConfig);
+        }
+
+        return defaultConfig;
+      }
+
+      // Migrate to database if available
+      if (database.isAvailable()) {
+        await this.savePermissionConfigToDatabase(serverId, allConfigs[serverId]);
+        logger.info(`Migrated permission config ${serverId} to database`);
       }
 
       return allConfigs[serverId];
@@ -68,8 +92,7 @@ export class PermissionManager {
         });
       }
 
-      allConfigs[serverId] = config;
-      await this.savePermissionConfigs(allConfigs);
+      await this.savePermissionConfig(serverId, config);
 
       logger.info(`Role permissions updated for ${roleName}`, {
         serverId,
@@ -118,8 +141,7 @@ export class PermissionManager {
         });
       }
 
-      allConfigs[serverId] = config;
-      await this.savePermissionConfigs(allConfigs);
+      await this.savePermissionConfig(serverId, config);
 
       logger.info(`User permissions updated for ${username}`, {
         serverId,
@@ -144,8 +166,7 @@ export class PermissionManager {
 
       config.rolePermissions = config.rolePermissions.filter(rp => rp.roleId !== roleId);
 
-      allConfigs[serverId] = config;
-      await this.savePermissionConfigs(allConfigs);
+      await this.savePermissionConfig(serverId, config);
 
       logger.info(`Role permissions removed`, { serverId, roleId });
     } catch (error) {
@@ -161,8 +182,7 @@ export class PermissionManager {
 
       config.userPermissions = config.userPermissions.filter(up => up.userId !== userId);
 
-      allConfigs[serverId] = config;
-      await this.savePermissionConfigs(allConfigs);
+      await this.savePermissionConfig(serverId, config);
 
       logger.info(`User permissions removed`, { serverId, userId });
     } catch (error) {
@@ -181,8 +201,7 @@ export class PermissionManager {
 
       config.defaultPermissions = permissions;
 
-      allConfigs[serverId] = config;
-      await this.savePermissionConfigs(allConfigs);
+      await this.savePermissionConfig(serverId, config);
 
       logger.info(`Default permissions updated`, { serverId, permissions });
     } catch (error) {
@@ -332,6 +351,73 @@ export class PermissionManager {
       await fs.mkdir(configDir, { recursive: true });
     } catch (error) {
       logger.error('Failed to create config directory', error);
+      throw error;
+    }
+  }
+
+  private async savePermissionConfig(serverId: string, config: PermissionConfig): Promise<void> {
+    try {
+      if (database.isAvailable()) {
+        await this.savePermissionConfigToDatabase(serverId, config);
+        logger.info(`Saved permission config for server ${serverId} to database`);
+      } else {
+        const allConfigs = await this.loadPermissionConfigs();
+        allConfigs[serverId] = config;
+        await this.savePermissionConfigs(allConfigs);
+        logger.info(`Saved permission config for server ${serverId} to file`);
+      }
+    } catch (error) {
+      logger.error(`Failed to save permission config for server ${serverId}`, error);
+      throw error;
+    }
+  }
+
+  private async loadPermissionConfigFromDatabase(serverId: string): Promise<PermissionConfig | null> {
+    try {
+      const result = await database.query(
+        'SELECT * FROM permission_configs WHERE server_id = $1',
+        [serverId]
+      );
+
+      if (result.rows.length === 0) {
+        return null;
+      }
+
+      const row = result.rows[0];
+      return {
+        rolePermissions: row.role_permissions || [],
+        userPermissions: row.user_permissions || [],
+        defaultPermissions: row.default_permissions || ['view_help'],
+        adminOnlyPermissions: row.admin_only_permissions || ['manage_config', 'manage_permissions']
+      };
+    } catch (error) {
+      logger.error(`Failed to load permission config from database for server ${serverId}`, error);
+      return null;
+    }
+  }
+
+  private async savePermissionConfigToDatabase(serverId: string, config: PermissionConfig): Promise<void> {
+    try {
+      await database.query(`
+        INSERT INTO permission_configs (
+          server_id, role_permissions, user_permissions,
+          default_permissions, admin_only_permissions, updated_at
+        ) VALUES ($1, $2, $3, $4, $5, CURRENT_TIMESTAMP)
+        ON CONFLICT (server_id) DO UPDATE SET
+          role_permissions = EXCLUDED.role_permissions,
+          user_permissions = EXCLUDED.user_permissions,
+          default_permissions = EXCLUDED.default_permissions,
+          admin_only_permissions = EXCLUDED.admin_only_permissions,
+          updated_at = CURRENT_TIMESTAMP
+      `, [
+        serverId,
+        JSON.stringify(config.rolePermissions),
+        JSON.stringify(config.userPermissions),
+        config.defaultPermissions,
+        config.adminOnlyPermissions
+      ]);
+    } catch (error) {
+      logger.error(`Failed to save permission config to database for server ${serverId}`, error);
       throw error;
     }
   }

@@ -132,6 +132,12 @@ export class ConfigManager {
       rules: [],
       clientRequirements: [],
       adminRoles: [],
+      permissions: {
+        rolePermissions: [],
+        userPermissions: [],
+        defaultPermissions: ['view_help'],
+        adminOnlyPermissions: ['manage_config', 'manage_permissions']
+      },
       settings: {
         defaultAnalysisPeriod: 'today',
         useCustomPrompt: false

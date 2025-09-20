@@ -233,6 +233,25 @@ discord-community-bot/
 - **課題の特定**: 潜在的な問題とその重要度
 - **改善提案**: 具体的なアクションアイテムと優先度
 
+## 🔧 最近の変更履歴
+
+### 2025-09-20: Claude API モデル更新
+- **問題**: Claude API で 404 エラー (`claude-3-sonnet-20240229` モデルが廃止)
+- **修正**: Claude analyzer のモデル名を `claude-3-5-sonnet-20241022` に更新
+- **影響**: Claude を使用した分析機能が正常に動作するように修正
+- **ファイル**: `src/analysis/claude-analyzer.ts` (24行目, 55行目, 108行目, 175行目)
+
+### 技術的詳細
+```typescript
+// 修正前
+model: 'claude-3-sonnet-20240229'
+
+// 修正後
+model: 'claude-3-5-sonnet-20241022'
+```
+
+この変更により、Claude APIの最新モデルを使用して分析が実行されます。
+
 ## 🔄 定期実行の設定
 
 クイック分析を定期実行したい場合は、cron jobやタスクスケジューラーを使用：

@@ -1,6 +1,8 @@
 import { GuildMember, PermissionFlagsBits } from 'discord.js';
 import { configManager } from '../config/server-config';
+import { permissionManager } from '../config/permission-manager';
 import { logger } from './logger';
+import { BotPermission } from '../types';
 
 export class PermissionChecker {
   private static instance: PermissionChecker;
@@ -52,20 +54,110 @@ export class PermissionChecker {
   }
 
   public async canUseBot(member: GuildMember): Promise<boolean> {
-    // For now, only admins can use the bot
-    return this.isAdmin(member);
+    // Check if user is admin first
+    const isAdmin = await this.isAdmin(member);
+    if (isAdmin) return true;
+
+    // Check new permission system
+    return await permissionManager.hasPermission(
+      member.guild.id,
+      member,
+      'use_bot'
+    );
   }
 
   public async canManageConfig(member: GuildMember): Promise<boolean> {
-    return this.isAdmin(member);
+    // Check if user is admin first
+    const isAdmin = await this.isAdmin(member);
+    if (isAdmin) return true;
+
+    // Check new permission system
+    return await permissionManager.hasPermission(
+      member.guild.id,
+      member,
+      'manage_config'
+    );
   }
 
   public async canRunAnalysis(member: GuildMember): Promise<boolean> {
-    return this.isAdmin(member);
+    // Check if user is admin first
+    const isAdmin = await this.isAdmin(member);
+    if (isAdmin) return true;
+
+    // Check new permission system
+    return await permissionManager.hasPermission(
+      member.guild.id,
+      member,
+      'run_analysis'
+    );
   }
 
   public async canConsult(member: GuildMember): Promise<boolean> {
-    return this.isAdmin(member);
+    // Check if user is admin first
+    const isAdmin = await this.isAdmin(member);
+    if (isAdmin) return true;
+
+    // Check new permission system
+    return await permissionManager.hasPermission(
+      member.guild.id,
+      member,
+      'consult'
+    );
+  }
+
+  public async canQuickAnalyze(member: GuildMember): Promise<boolean> {
+    // Check if user is admin first
+    const isAdmin = await this.isAdmin(member);
+    if (isAdmin) return true;
+
+    // Check new permission system
+    return await permissionManager.hasPermission(
+      member.guild.id,
+      member,
+      'quick_analyze'
+    );
+  }
+
+  public async canManagePermissions(member: GuildMember): Promise<boolean> {
+    // Check if user is admin first
+    const isAdmin = await this.isAdmin(member);
+    if (isAdmin) return true;
+
+    // Check new permission system
+    return await permissionManager.hasPermission(
+      member.guild.id,
+      member,
+      'manage_permissions'
+    );
+  }
+
+  public async canViewHelp(member: GuildMember): Promise<boolean> {
+    // Check if user is admin first
+    const isAdmin = await this.isAdmin(member);
+    if (isAdmin) return true;
+
+    // Check new permission system
+    return await permissionManager.hasPermission(
+      member.guild.id,
+      member,
+      'view_help'
+    );
+  }
+
+  public async hasSpecificPermission(
+    member: GuildMember,
+    permission: BotPermission
+  ): Promise<boolean> {
+    // Check if user is admin first
+    const isAdmin = await this.isAdmin(member);
+    if (isAdmin) return true;
+
+    // Check new permission system
+    return await permissionManager.hasPermission(
+      member.guild.id,
+      member,
+      permission
+    );
   }
 
   public getPermissionErrorMessage(action: string): string {

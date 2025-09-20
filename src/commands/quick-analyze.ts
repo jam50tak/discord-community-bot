@@ -29,7 +29,7 @@ export const quickAnalyzeCommand = {
 
     // Permission check
     const member = interaction.member;
-    const hasPermission = await permissionChecker.canRunAnalysis(member as any);
+    const hasPermission = await permissionChecker.canQuickAnalyze(member as any);
 
     if (!hasPermission) {
       await interaction.reply({

@@ -9,6 +9,7 @@ export interface ServerConfig {
   rules: string[];
   clientRequirements: string[];
   adminRoles: string[];
+  permissions: PermissionConfig;
   settings: {
     defaultAnalysisPeriod: 'today' | 'yesterday';
     useCustomPrompt: boolean;
@@ -214,4 +215,40 @@ export interface PromptValidation {
   isValid: boolean;
   errors: string[];
   warnings: string[];
+}
+
+export type BotPermission =
+  | 'use_bot'           // ボットの基本使用
+  | 'run_analysis'      // 分析機能の実行
+  | 'quick_analyze'     // クイック分析の実行
+  | 'consult'           // 相談機能の使用
+  | 'manage_config'     // 設定変更
+  | 'manage_permissions'// 権限管理
+  | 'view_help';        // ヘルプの表示
+
+export interface PermissionConfig {
+  // ロール別権限設定
+  rolePermissions: RolePermission[];
+  // ユーザー別権限設定
+  userPermissions: UserPermission[];
+  // デフォルト権限（新規ユーザー/未設定ロール）
+  defaultPermissions: BotPermission[];
+  // 管理者限定機能（常に管理者のみ）
+  adminOnlyPermissions: BotPermission[];
+}
+
+export interface RolePermission {
+  roleId: string;
+  roleName: string;
+  permissions: BotPermission[];
+  enabled: boolean;
+}
+
+export interface UserPermission {
+  userId: string;
+  username: string;
+  permissions: BotPermission[];
+  enabled: boolean;
+  // 個別設定か継承設定か
+  isCustom: boolean;
 }

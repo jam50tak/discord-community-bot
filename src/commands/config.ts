@@ -7,10 +7,11 @@ import {
 import { configManager } from '../config/server-config';
 import { apiKeyManager } from '../config/apikey-manager';
 import { promptManager } from '../config/prompt-manager';
+import { permissionManager } from '../config/permission-manager';
 import { aiAnalyzerFactory } from '../analysis/ai-analyzer-factory';
 import { permissionChecker } from '../utils/permission-checker';
 import { logger } from '../utils/logger';
-import { AIProvider } from '../types';
+import { AIProvider, BotPermission } from '../types';
 
 export const configCommand = {
   data: new SlashCommandBuilder()
@@ -154,6 +155,94 @@ export const configCommand = {
             .setName('templates')
             .setDescription('プロンプトテンプレート一覧を表示')
         )
+    )
+    .addSubcommandGroup(group =>
+      group
+        .setName('permissions')
+        .setDescription('権限設定の管理')
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('view')
+            .setDescription('現在の権限設定を表示')
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('role-add')
+            .setDescription('ロールに権限を付与')
+            .addRoleOption(option =>
+              option
+                .setName('role')
+                .setDescription('対象ロール')
+                .setRequired(true)
+            )
+            .addStringOption(option =>
+              option
+                .setName('permissions')
+                .setDescription('権限（カンマ区切り）')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('role-remove')
+            .setDescription('ロールの権限を削除')
+            .addRoleOption(option =>
+              option
+                .setName('role')
+                .setDescription('対象ロール')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('user-add')
+            .setDescription('ユーザーに個別権限を付与')
+            .addUserOption(option =>
+              option
+                .setName('user')
+                .setDescription('対象ユーザー')
+                .setRequired(true)
+            )
+            .addStringOption(option =>
+              option
+                .setName('permissions')
+                .setDescription('権限（カンマ区切り）')
+                .setRequired(true)
+            )
+            .addBooleanOption(option =>
+              option
+                .setName('custom')
+                .setDescription('カスタム設定（既存権限を上書き）')
+                .setRequired(false)
+            )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('user-remove')
+            .setDescription('ユーザーの個別権限を削除')
+            .addUserOption(option =>
+              option
+                .setName('user')
+                .setDescription('対象ユーザー')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('default')
+            .setDescription('デフォルト権限を設定')
+            .addStringOption(option =>
+              option
+                .setName('permissions')
+                .setDescription('権限（カンマ区切り）')
+                .setRequired(true)
+            )
+        )
+        .addSubcommand(subcommand =>
+          subcommand
+            .setName('list-permissions')
+            .setDescription('利用可能な権限一覧を表示')
+        )
     ),
 
   async execute(interaction: ChatInputCommandInteraction): Promise<void> {
@@ -193,6 +282,9 @@ export const configCommand = {
           break;
         case 'prompt':
           await this.handlePromptCommands(interaction, subcommand);
+          break;
+        case 'permissions':
+          await this.handlePermissionCommands(interaction, subcommand);
           break;
         default:
           await interaction.reply({
@@ -487,5 +579,208 @@ export const configCommand = {
         await interaction.reply({ embeds: [templatesEmbed], ephemeral: true });
         break;
     }
+  },
+
+  async handlePermissionCommands(
+    interaction: ChatInputCommandInteraction,
+    subcommand: string
+  ): Promise<void> {
+    const serverId = interaction.guild!.id;
+
+    switch (subcommand) {
+      case 'view':
+        const config = await permissionManager.getPermissionConfig(serverId);
+
+        const embed = new EmbedBuilder()
+          .setColor(0x0099ff)
+          .setTitle('🔐 現在の権限設定')
+          .setDescription('サーバーの権限設定状況');
+
+        // デフォルト権限
+        if (config.defaultPermissions.length > 0) {
+          embed.addFields({
+            name: '🌟 デフォルト権限',
+            value: config.defaultPermissions.map(p =>
+              `• ${permissionManager.getPermissionDescription(p)}`
+            ).join('\n'),
+            inline: false
+          });
+        }
+
+        // ロール権限
+        if (config.rolePermissions.length > 0) {
+          embed.addFields({
+            name: '👥 ロール権限',
+            value: config.rolePermissions
+              .filter(rp => rp.enabled)
+              .map(rp => `**${rp.roleName}**\n${rp.permissions.map(p =>
+                `• ${permissionManager.getPermissionDescription(p)}`
+              ).join('\n')}`)
+              .join('\n\n'),
+            inline: false
+          });
+        }
+
+        // ユーザー権限
+        if (config.userPermissions.length > 0) {
+          embed.addFields({
+            name: '👤 個別ユーザー権限',
+            value: config.userPermissions
+              .filter(up => up.enabled)
+              .map(up => `**${up.username}** ${up.isCustom ? '(カスタム)' : '(継承)'}\n${up.permissions.map(p =>
+                `• ${permissionManager.getPermissionDescription(p)}`
+              ).join('\n')}`)
+              .join('\n\n'),
+            inline: false
+          });
+        }
+
+        // 管理者限定機能
+        embed.addFields({
+          name: '🛡️ 管理者限定機能',
+          value: config.adminOnlyPermissions.map(p =>
+            `• ${permissionManager.getPermissionDescription(p)}`
+          ).join('\n'),
+          inline: false
+        });
+
+        await interaction.reply({ embeds: [embed], ephemeral: true });
+        break;
+
+      case 'role-add':
+        const role = interaction.options.getRole('role', true);
+        const rolePermissions = interaction.options.getString('permissions', true);
+
+        const rolePerms = this.parsePermissions(rolePermissions);
+        if (rolePerms.length === 0) {
+          await interaction.reply({
+            content: '❌ 有効な権限が指定されていません。',
+            ephemeral: true
+          });
+          return;
+        }
+
+        await permissionManager.setRolePermissions(
+          serverId,
+          role.id,
+          role.name,
+          rolePerms
+        );
+
+        await interaction.reply({
+          content: `✅ ロール **${role.name}** に権限を設定しました。`,
+          ephemeral: true
+        });
+        break;
+
+      case 'role-remove':
+        const removeRole = interaction.options.getRole('role', true);
+
+        await permissionManager.removeRolePermissions(serverId, removeRole.id);
+
+        await interaction.reply({
+          content: `✅ ロール **${removeRole.name}** の権限を削除しました。`,
+          ephemeral: true
+        });
+        break;
+
+      case 'user-add':
+        const user = interaction.options.getUser('user', true);
+        const userPermissions = interaction.options.getString('permissions', true);
+        const isCustom = interaction.options.getBoolean('custom') ?? false;
+
+        const userPerms = this.parsePermissions(userPermissions);
+        if (userPerms.length === 0) {
+          await interaction.reply({
+            content: '❌ 有効な権限が指定されていません。',
+            ephemeral: true
+          });
+          return;
+        }
+
+        await permissionManager.setUserPermissions(
+          serverId,
+          user.id,
+          user.username,
+          userPerms,
+          isCustom
+        );
+
+        await interaction.reply({
+          content: `✅ ユーザー **${user.username}** に${isCustom ? 'カスタム' : '追加'}権限を設定しました。`,
+          ephemeral: true
+        });
+        break;
+
+      case 'user-remove':
+        const removeUser = interaction.options.getUser('user', true);
+
+        await permissionManager.removeUserPermissions(serverId, removeUser.id);
+
+        await interaction.reply({
+          content: `✅ ユーザー **${removeUser.username}** の個別権限を削除しました。`,
+          ephemeral: true
+        });
+        break;
+
+      case 'default':
+        const defaultPermissions = interaction.options.getString('permissions', true);
+
+        const defaultPerms = this.parsePermissions(defaultPermissions);
+        if (defaultPerms.length === 0) {
+          await interaction.reply({
+            content: '❌ 有効な権限が指定されていません。',
+            ephemeral: true
+          });
+          return;
+        }
+
+        await permissionManager.setDefaultPermissions(serverId, defaultPerms);
+
+        await interaction.reply({
+          content: '✅ デフォルト権限を設定しました。',
+          ephemeral: true
+        });
+        break;
+
+      case 'list-permissions':
+        const allPermissions = permissionManager.getAllPermissions();
+
+        const permissionsEmbed = new EmbedBuilder()
+          .setColor(0x0099ff)
+          .setTitle('📋 利用可能な権限一覧')
+          .setDescription('以下の権限を設定できます：');
+
+        permissionsEmbed.addFields({
+          name: '権限',
+          value: allPermissions.map(perm =>
+            `\`${perm}\` - ${permissionManager.getPermissionDescription(perm)}`
+          ).join('\n'),
+          inline: false
+        });
+
+        permissionsEmbed.addFields({
+          name: '使用例',
+          value: '```\n' +
+            '/config permissions role-add role:@メンバー permissions:use_bot,run_analysis\n' +
+            '/config permissions user-add user:@ユーザー permissions:consult custom:true\n' +
+            '/config permissions default permissions:view_help\n' +
+            '```',
+          inline: false
+        });
+
+        await interaction.reply({ embeds: [permissionsEmbed], ephemeral: true });
+        break;
+    }
+  },
+
+  parsePermissions(permissionString: string): BotPermission[] {
+    const validPermissions = permissionManager.getAllPermissions();
+    const inputPermissions = permissionString
+      .split(',')
+      .map(p => p.trim() as BotPermission)
+      .filter(p => validPermissions.includes(p));
+
+    return inputPermissions;
   }
 };
